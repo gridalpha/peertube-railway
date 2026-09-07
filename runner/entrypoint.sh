@@ -124,6 +124,34 @@ register() {
 
 write_config
 
+# `register` and `list-registered` are not standalone commands: they are RPCs to
+# a *running* `peertube-runner server` over a unix socket in
+# $HOME/.local/share/peertube-runner-nodejs/default/. Starting the server first
+# and registering against it is the only order that works — the other way round
+# fails with `connect ENOENT …/peertube-runner.sock`.
+peertube-runner server &
+RUNNER_PID=$!
+echo "$RUNNER_PID" > /tmp/runner.pid
+
+# The runner serves no HTTP of its own, so without this a crash-looping worker
+# would report SUCCESS forever.
+node /srv/health.mjs &
+
+trap 'kill -TERM "$RUNNER_PID" 2>/dev/null' TERM INT
+
+RUNNER_SOCK="$HOME/.local/share/peertube-runner-nodejs/default/peertube-runner.sock"
+i=0
+while [ "$i" -lt 60 ]; do
+  if [ -S "$RUNNER_SOCK" ]; then
+    break
+  fi
+  i=$(( i + 1 ))
+  sleep 1
+done
+if [ ! -S "$RUNNER_SOCK" ]; then
+  log "ERROR: runner server did not open its control socket"
+fi
+
 if is_registered; then
   log "already registered with $PEERTUBE_URL"
 else
@@ -155,13 +183,4 @@ if ! is_registered; then
   log "ERROR: not registered with $PEERTUBE_URL — VOD transcoding jobs will stay pending"
 fi
 
-peertube-runner server &
-RUNNER_PID=$!
-echo "$RUNNER_PID" > /tmp/runner.pid
-
-# The runner serves no HTTP of its own, so without this a crash-looping worker
-# would report SUCCESS forever.
-node /srv/health.mjs &
-
-trap 'kill -TERM "$RUNNER_PID" 2>/dev/null' TERM INT
 wait "$RUNNER_PID"
