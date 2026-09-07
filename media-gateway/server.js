@@ -123,6 +123,10 @@ function parseKey(url) {
   } catch {
     return null;
   }
+  // With `object_storage.force_path_style`, PeerTube puts the bucket name in
+  // the path — both in the URLs it builds and in the presigned ones it rewrites
+  // onto this host. Accept either shape.
+  if (key.startsWith(`${bucket}/`)) key = key.slice(bucket.length + 1);
   if (!publicPrefixes.some((prefix) => key.startsWith(prefix))) return null;
   if (key.endsWith("/")) return null;
   if (key.split("/").some((s) => s === "" || s === "." || s === "..")) return null;
