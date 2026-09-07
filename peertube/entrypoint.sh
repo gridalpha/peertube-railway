@@ -27,7 +27,15 @@ DATA_DIR="${PEERTUBE_DATA_DIR:-/data}"
 # `local-production.json` under PEERTUBE_LOCAL_CONFIG. The image points that at
 # /config, which is a second mount here; keep it on the media volume so a
 # redeploy does not silently revert the instance configuration.
-export PEERTUBE_LOCAL_CONFIG="${PEERTUBE_LOCAL_CONFIG:-$DATA_DIR/config}"
+#
+# The image bakes `ENV PEERTUBE_LOCAL_CONFIG /config`, so a `${VAR:-default}`
+# would silently keep the image's path and the volume would stay empty behind a
+# green deploy. Match the baked literal explicitly, which still lets an operator
+# override it with a path of their own.
+case "${PEERTUBE_LOCAL_CONFIG-}" in
+  "" | /config) PEERTUBE_LOCAL_CONFIG="$DATA_DIR/config" ;;
+esac
+export PEERTUBE_LOCAL_CONFIG
 export NODE_CONFIG_DIR="/app/config:/app/support/docker/production/config:$PEERTUBE_LOCAL_CONFIG"
 mkdir -p "$PEERTUBE_LOCAL_CONFIG" "$DATA_DIR/tmp" "$DATA_DIR/tmp-persistent"
 chown -R peertube:peertube "$PEERTUBE_LOCAL_CONFIG" || true
